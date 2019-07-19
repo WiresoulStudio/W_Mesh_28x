@@ -408,6 +408,7 @@ def draw_WTube_panel(self, context):
     col.prop(WData, "seg_3", text="Height")
 
     lay_out.prop(WData, "inn", text="Use inner radius")
+    lay_out.prop(WData, "cent", text="Centered")
     lay_out.prop(WData, "smo", text="Smooth Shading")
     lay_out.prop(WData, "anim", text="Animated")
 

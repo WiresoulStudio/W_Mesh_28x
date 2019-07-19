@@ -235,7 +235,7 @@ def draw_WCone_panel(self, context):
     lay_out.label(text="Type: wCone", icon='MESH_CONE')
 
     col = lay_out.column(align=True)
-    col.prop(WData, "rad_1", text="Radius Top")
+    col.prop(WData, "rad_2", text="Radius Top")
     col.prop(WData, "rad_1", text="Radius Main")
     col.prop(WData, "siz_z", text="Height")
     
