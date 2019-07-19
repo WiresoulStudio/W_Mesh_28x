@@ -229,7 +229,7 @@ class Make_WScrew(bpy.types.Operator):
     segments: IntProperty(
         name="Segments",
         description="Perimetr segments",
-        default=16,
+        default=12,
         min=3,
         soft_min=3
     )
@@ -292,6 +292,7 @@ class Make_WScrew(bpy.types.Operator):
 
         bpy.ops.object.shade_smooth()
         context.object.data.use_auto_smooth = True
+        context.object.data.auto_smooth_angle = 1.0
         return {'FINISHED'}
 
 # create UI panel
