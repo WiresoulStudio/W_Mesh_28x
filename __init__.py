@@ -306,7 +306,7 @@ class WEditPanel(bpy.types.Panel):
             if WType == 'WTUBE': draw_WTube_panel(self, context)
 
             lay_out.separator()
-            lay_out.operator(operator="mesh.convert_w_mesh", icon='NDOF_DOM')
+            lay_out.operator(operator="mesh.convert_w_mesh")
             lay_out.separator()
             
 class WAnimPanel(bpy.types.Panel):
