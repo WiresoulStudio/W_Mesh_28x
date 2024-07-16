@@ -196,9 +196,9 @@ class Make_WTorus(bpy.types.Operator):
         
         object_utils.object_data_add(context, mesh, operator=None)
 
-        bpy.ops.object.shade_smooth()
-        context.object.data.use_auto_smooth = True
-        context.object.data.auto_smooth_angle = 1.0
+        if self.smoothed:
+            bpy.ops.object.shade_smooth()
+
         return {'FINISHED'}
 
 # create UI panel

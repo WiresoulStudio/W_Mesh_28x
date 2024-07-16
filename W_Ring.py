@@ -203,11 +203,9 @@ class Make_WRing(bpy.types.Operator):
 
         mesh.from_pydata(*update_WRing(wD))
         mesh.update()
-        
+
         object_utils.object_data_add(context, mesh, operator=None)
 
-        bpy.ops.object.shade_smooth()
-        context.object.data.use_auto_smooth = True
         return {'FINISHED'}
 
 # create UI panel
