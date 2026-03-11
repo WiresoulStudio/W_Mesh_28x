@@ -1,47 +1,52 @@
 # __________________________________/
 # __Author:_________Vit_Prochazka___/
-# __Created:________16.07.2019______/
-# __Version:________1.0_____________/
+# __Change Author:__Skii____________/
+# __Created:________16.12.2015______/
+# __Last_modified:__10.03.2026______/
+# __Version:_0.2_Sub1(Community_Fix)/
 # __________________________________/
 
-# imports
 import bpy
-from bpy.props import (
-    FloatProperty,
-    IntProperty,
-    BoolProperty,
-    PointerProperty
-)
-from bpy_extras import object_utils
-from mathutils import Vector, Quaternion
-from math import pi as PI
-from .genFunctions import (
+from mathutils import Vector
+from bpy.props import BoolProperty, IntProperty, FloatProperty, PointerProperty
+
+from .gen_func import (
     circleVerts as circ_V,
     moveVerts as move_V,
     fanClose,
     bridgeLoops,
-    create_mesh_object
+    create_mesh_object as c_mesh
 )
 
-# generate geometry
-def geoGen_WCone (
-    radius_main,
-    radius_top,
-    height,
-    seg_perimeter,
-    seg_height,
-    seg_radius,
-    centered,
-    smoothed):
-    
-    # Prepare empty lists
+
+WCone_Defaults = {
+    "radius_main": 1.0,
+    "radius_top": 0.0,
+    "height": 2.0,
+    "seg_perimeter": 24,
+    "seg_height": 1,
+    "seg_radius": 1,
+    "centered": False,
+    "smoothed": True
+}
+
+
+def primitive_Cone_ME(
+        radius_main=1.0,
+        radius_top=0.0,
+        height=2.0,
+        seg_perimeter=24,
+        seg_height=1,
+        seg_radius=1,
+        centered=False,
+        smoothed=True):
+
     verts = []
     edges = []
     faces = []
 
     loops = []
 
-    # Set minimums
     if seg_perimeter < 3:
         seg_perimeter = 3
     if seg_height < 1:
@@ -49,7 +54,6 @@ def geoGen_WCone (
     if seg_radius < 1:
         seg_radius = 1
 
-    # Add top and bottom center vertices
     verts.append(Vector((0, 0, 0)))
     verts.append(Vector((0, 0, height)))
 
@@ -57,7 +61,6 @@ def geoGen_WCone (
         edges.append((0, 1))
         return verts, edges, faces
 
-    # Create base segmentation loops
     if radius_main > 0:
         if seg_radius > 1:
             step = radius_main / seg_radius
@@ -66,12 +69,10 @@ def geoGen_WCone (
                 verts.extend(newVerts)
                 loops.append(loop)
 
-        # Create the base corner circle
         newVerts, loop = circ_V(radius_main, seg_perimeter, len(verts))
         verts.extend(newVerts)
         loops.append(loop)
 
-    # Create the side segmentation loops
     if seg_height > 1:
         heightStep = height / seg_height
         radiusStep = (radius_top - radius_main) / seg_height
@@ -82,14 +83,12 @@ def geoGen_WCone (
             verts.extend(newVerts)
             loops.append(loop)
 
-    # Create top corner circle
     if radius_top > 0:
         newVerts, loop = circ_V(radius_top, seg_perimeter, len(verts))
         move_V(newVerts, Vector((0, 0, height)))
         verts.extend(newVerts)
         loops.append(loop)
 
-        # Create the top segmentation loops
         if seg_radius > 1:
             step = radius_top / seg_radius
             for i in range(1, seg_radius):
@@ -99,11 +98,9 @@ def geoGen_WCone (
                 verts.extend(newVerts)
                 loops.append(loop)
 
-    # Close caps
-    faces.extend(fanClose(loops[0], 0, closed = True, flipped = True))
+    faces.extend(fanClose(loops[0], 0, closed=True, flipped=True))
     faces.extend(fanClose(loops[-1], 1))
 
-    # Bridge all loops
     for i in range(1, len(loops)):
         faces.extend(bridgeLoops(loops[i - 1], loops[i], True))
 
@@ -112,146 +109,152 @@ def geoGen_WCone (
 
     return verts, edges, faces
 
-def update_WCone (wData):
-    return geoGen_WCone (
-        radius_main = wData.rad_1,
-        radius_top = wData.rad_2,
-        height = wData.siz_z,
-        seg_perimeter = wData.seg_1,
-        seg_height = wData.seg_2,
-        seg_radius = wData.seg_3,
-        centered = wData.cent,
-        smoothed = wData.smo
+
+def update_cone(self, context):
+
+    if context.object is None:
+        return
+
+    mesh = context.object.data
+
+    verts, edges, faces = primitive_Cone_ME(
+        self.rad_main,
+        self.rad_top,
+        self.height,
+        self.seg_perimeter,
+        self.seg_height,
+        self.seg_radius,
+        self.centered,
+        self.smoothed
     )
 
-# add object W_Plane
-class Make_WCone(bpy.types.Operator):
-    """Create primitive wCone"""
-    bl_idname = "mesh.make_wcone"
-    bl_label = "wCone"
-    bl_options = {'UNDO', 'REGISTER'}
+    mesh.clear_geometry()
+    mesh.from_pydata(verts, edges, faces)
 
-    radius_top: FloatProperty(
-        name = "Radius top",
-        description = "Top Radius",
-        default = 0.0,
-        min = 0.0,
-        soft_min = 0.0,
-        step = 1,
-        precision = 2,
-        unit = "LENGTH"
+    if self.smoothed:
+        for poly in mesh.polygons:
+            poly.use_smooth = True
+
+    mesh.update()
+
+
+class WConeData(bpy.types.PropertyGroup):
+
+    rad_top: FloatProperty(
+        name="Radius top",
+        default=0.0,
+        min=0.0,
+        update=update_cone
     )
 
-    radius_main: FloatProperty(
-        name = "Radius bottom",
-        description = "Bottom Radius",
-        default = 1.0,
-        min = 0.0,
-        soft_min = 0.0,
-        step = 1,
-        precision = 2,
-        unit = "LENGTH"
+    rad_main: FloatProperty(
+        name="Radius bottom",
+        default=1.0,
+        min=0.0,
+        update=update_cone
     )
 
     height: FloatProperty(
-        name = "Height",
-        description = "Height of the cone",
-        default = 2.0,
-        min = 0.0,
-        soft_min = 0.0,
-        step = 1,
-        precision = 2,
-        unit = "LENGTH"
+        name="Height",
+        default=2.0,
+        min=0.0,
+        update=update_cone
     )
 
     seg_perimeter: IntProperty(
-        name = "Perim Segments",
-        description = "Subdivision on perimeter",
-        default = 24,
-        min = 3,
-        soft_min = 3,
-        step = 1,
-        subtype = 'NONE'
+        name="Perim Segments",
+        default=24,
+        min=3,
+        update=update_cone
     )
 
     seg_height: IntProperty(
-        name = "Height Segments",
-        description = "Subdivision of the height",
-        default = 1,
-        min = 1,
-        soft_min = 1,
-        step = 1,
-        subtype = 'NONE'
+        name="Height Segments",
+        default=1,
+        min=1,
+        update=update_cone
     )
 
     seg_radius: IntProperty(
-        name = "Radius Segments",
-        description = "Subdivision of the radius",
-        default = 1,
-        min = 1,
-        soft_min = 1,
-        step = 1,
-        subtype = 'NONE'
+        name="Radius Segments",
+        default=1,
+        min=1,
+        update=update_cone
     )
 
     centered: BoolProperty(
-        name = "Centered",
-        description = "Set origin of the cone",
-        default = False
+        name="Centered",
+        default=False,
+        update=update_cone
     )
+
+    smoothed: BoolProperty(
+        name="Smooth",
+        default=True,
+        update=update_cone
+    )
+
+
+class Make_WCone(bpy.types.Operator):
+    """Create primitive WCone mesh"""
+    bl_idname = "mesh.make_wcone"
+    bl_label = "WCone"
+    bl_options = {'UNDO', 'REGISTER'}
 
     def execute(self, context):
 
-        mesh = bpy.data.meshes.new("wCone")
+        verts, edges, faces = primitive_Cone_ME(**WCone_Defaults)
 
-        wD = mesh.wData
-        wD.rad_1 = self.radius_main
-        wD.rad_2 = self.radius_top
-        wD.siz_z = self.height
-        wD.seg_1 = self.seg_perimeter
-        wD.seg_2 = self.seg_height
-        wD.seg_3 = self.seg_radius
-        wD.cent = self.centered
-        wD.smo = True
-        wD.wType = 'WCONE'
+        obj = c_mesh(context, verts, edges, faces, "WCone")
+        mesh = obj.data
 
+        mesh.WType = 'WCONE'
 
-        mesh.from_pydata(*update_WCone(wD))
-        mesh.update()
-        
-        object_utils.object_data_add(context, mesh, operator=None)
+        mesh.WCone.rad_top = WCone_Defaults["radius_top"]
+        mesh.WCone.rad_main = WCone_Defaults["radius_main"]
+        mesh.WCone.height = WCone_Defaults["height"]
+        mesh.WCone.seg_perimeter = WCone_Defaults["seg_perimeter"]
+        mesh.WCone.seg_height = WCone_Defaults["seg_height"]
+        mesh.WCone.seg_radius = WCone_Defaults["seg_radius"]
+        mesh.WCone.centered = WCone_Defaults["centered"]
+        mesh.WCone.smoothed = WCone_Defaults["smoothed"]
 
         bpy.ops.object.shade_smooth()
-        context.object.data.use_auto_smooth = True
-        context.object.data.auto_smooth_angle = 1.0
+
         return {'FINISHED'}
 
-# create UI panel
-def draw_WCone_panel(self, context):
-    lay_out = self.layout
-    lay_out.use_property_split = True
-    WData = context.object.data.wData
 
-    lay_out.label(text="Type: wCone", icon='MESH_CONE')
+def drawWConePanel(self, context):
 
-    col = lay_out.column(align=True)
-    col.prop(WData, "rad_2", text="Radius Top")
-    col.prop(WData, "rad_1", text="Radius Main")
-    col.prop(WData, "siz_z", text="Height")
-    
-    col = lay_out.column(align=True)
-    col.prop(WData, "seg_1", text="Segmentation Main")
-    col.prop(WData, "seg_2", text="Vertical")
-    col.prop(WData, "seg_3", text="Caps")
+    layout = self.layout
+    data = context.object.data.WCone
 
-    lay_out.prop(WData, "cent", text="Centered")
-    lay_out.prop(WData, "smo", text="Smooth Shading")
-    lay_out.prop(WData, "anim", text="Animated")
+    layout.label(text="Type: WCone", icon="MESH_CONE")
+
+    row = layout.row()
+
+    col = row.column(align=True)
+    col.prop(data, "rad_top")
+    col.prop(data, "rad_main")
+    col.prop(data, "height")
+
+    col = row.column(align=True)
+    col.prop(data, "seg_perimeter")
+    col.prop(data, "seg_height")
+    col.prop(data, "seg_radius")
+
+    row = layout.row()
+    row.prop(data, "centered")
+    row.prop(data, "smoothed")
 
 
-# register
-def reg_wCone():
+def registerWCone():
     bpy.utils.register_class(Make_WCone)
-# unregister
-def unreg_wCone():
+    bpy.utils.register_class(WConeData)
+    bpy.types.Mesh.WCone = PointerProperty(type=WConeData)
+
+
+def unregisterWCone():
     bpy.utils.unregister_class(Make_WCone)
+    bpy.utils.unregister_class(WConeData)
+    del bpy.types.Mesh.WCone

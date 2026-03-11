@@ -1,7 +1,9 @@
 # __________________________________/
 # __Author:_________Vit_Prochazka___/
-# __Created:________16.07.2019______/
-# __Version:________1.0_____________/
+# __Change Author:__Skii/
+# __Created:________15.12.2015______/
+# __Last_modified:__10.03.2026______/
+# __Version:_0.4_Sub1(Community_Fix)/
 # __________________________________/
 
 import bpy
@@ -9,20 +11,6 @@ from mathutils import Vector, Quaternion
 from math import pi
 from typing import List
 
-def bridgeLoops(loop1, loop2, close):
-    faces = []
-
-    if len(loop1) != len(loop2):
-        return None
-
-    for i in range(len(loop1) - 1):
-        face = (loop1[i], loop1[i + 1], loop2[i + 1], loop2[i])
-        faces.append(face)
-
-    if close:
-        faces.append((loop1[- 1], loop1[0], loop2[0], loop2[- 1]))
-
-    return faces
 
 def create_mesh_object(context, verts, edges, faces, name):
 
@@ -33,7 +21,7 @@ def create_mesh_object(context, verts, edges, faces, name):
 
     from bpy_extras import object_utils
     return object_utils.object_data_add(context, mesh, operator=None)
-    
+
 
 def circleVerts(radius: float, seg: int, IDs_Offset: int):
     verts = []
@@ -69,6 +57,23 @@ def rotateVerts(
 
     for i, vel in enumerate(verts):
         verts[i] = axis @ vel
+
+
+def bridgeLoops(loop1, loop2, close):
+    faces = []
+
+    if len(loop1) != len(loop2):
+        return None
+
+    for i in range(len(loop1) - 1):
+        face = (loop1[i], loop1[i + 1], loop2[i + 1], loop2[i])
+        faces.append(face)
+
+    if close:
+        faces.append((loop1[- 1], loop1[0], loop2[0], loop2[- 1]))
+
+    return faces
+
 
 def fanClose(loop, point, closed = True, flipped = False):
     faces = []

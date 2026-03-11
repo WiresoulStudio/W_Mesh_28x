@@ -1,77 +1,76 @@
 # __________________________________/
 # __Author:_________Vit_Prochazka___/
-# __Created:________16.07.2019______/
-# __Version:________1.0_____________/
+# __Change Author:__Skii____________/
+# __Created:________13.08.2017______/
+# __Last_modified:__10.03.2026______/
+# __Version:_0.2_Sub1(Community_Fix)/
 # __________________________________/
 
-# imports
 import bpy
-from bpy.props import (
-    FloatProperty,
-    IntProperty,
-    BoolProperty,
-    PointerProperty,
-    EnumProperty
-)
-from bpy_extras import object_utils
+from bpy.props import FloatProperty, IntProperty, PointerProperty, EnumProperty, BoolProperty
 from mathutils import Vector, Quaternion
 from math import pi
-from .genFunctions import (
-    circleVerts as circ_V,
-    moveVerts as move_V,
-    fanClose,
-    subdivide,
-    bridgeLoops
-)
+from .gen_func import bridgeLoops, create_mesh_object, subdivide
 from .W_Bases import baseHedron
 
 
-def primitive_UVSphere(
-                radius = 1.0,
-                segments = 24,
-                rings = 12):
+WSphere_defaults = {
+    "radius": 1.0,
+    "segments": 24,
+    "rings": 12,
+    "base": 'CUBE',
+    "divisions": 2,
+    "tris": False,
+    "smoothed": True
+}
+
+
+def primitive_UVSphere(radius=1.0, segments=24, rings=12):
 
     verts = []
     edges = []
     faces = []
-
     loops = []
 
-    # create top and bottom verts
     verts.append(Vector((0.0, 0.0, radius)))
     verts.append(Vector((0.0, 0.0, -radius)))
 
-    # calculate angles
     UAngle = (2*pi)/segments
     VAngle = pi/rings
 
-    # create rings
     for v in range(rings - 1):
+
         loop = []
+
         quatV = Quaternion((0, -1, 0), VAngle * (v + 1))
         baseVect = quatV @ Vector((0.0, 0.0, -radius))
+
         for u in range(segments):
+
             loop.append(len(verts))
             quatU = Quaternion((0, 0, 1), UAngle * u)
+
             verts.append(quatU @ baseVect)
+
         loops.append(loop)
 
-    # create faces
     for i in range(rings - 2):
         faces.extend(bridgeLoops(loops[i], loops[i + 1], True))
 
-    # fill top
     ring = loops[-1]
+
     for i in range(segments):
-        if (i == segments - 1):
+
+        if i == segments - 1:
             faces.append((ring[i], ring[0], 0))
         else:
             faces.append((ring[i], ring[i + 1], 0))
 
-    # fill bottom
     ring = loops[0]
+
     for i in range(segments):
-        if (i == segments - 1):
+
+        if i == segments - 1:
             faces.append((ring[0], ring[i], 1))
         else:
             faces.append((ring[i + 1], ring[i], 1))
@@ -79,12 +78,7 @@ def primitive_UVSphere(
     return verts, edges, faces
 
 
-
-def primitive_polySphere(
-                    base = "CUBE",
-                    radius = 1.0,
-                    divisions = 2,
-                    tris = True):
+def primitive_polySphere(base='CUBE', radius=1.0, divisions=2, tris=True):
 
     verts, edges, faces = baseHedron(base)
 
@@ -96,9 +90,9 @@ def primitive_polySphere(
         tris = False
 
     for i in range(divisions):
+
         verts, edges, faces = subdivide(verts, edges, faces, tris)
 
-        # normalize
         for vert in verts:
             vert.normalize()
             vert *= radius
@@ -106,150 +100,163 @@ def primitive_polySphere(
     return verts, edges, faces
 
 
-def update_WSphere (wData):
-    if wData.sBase == "UV":
-        return primitive_UVSphere(
-            radius = wData.rad_1,
-            segments = wData.seg_1,
-            rings = wData.seg_2
-        )
-    else:
-        return primitive_polySphere(
-            base = wData.sBase,
-            radius = wData.rad_1,
-            divisions = wData.seg_3,
-            tris = wData.inn
-        )
-        
-    
+def update_sphere(self, context):
 
-# add object W_Plane
-class Make_WSphere(bpy.types.Operator):
-    """Create primitive wSphere"""
-    bl_idname = "mesh.make_wsphere"
-    bl_label = "wSphere"
-    bl_options = {'UNDO', 'REGISTER'}
+    if context.object is None:
+        return
+
+    mesh = context.object.data
+
+    if self.base == 'UV':
+
+        verts, edges, faces = primitive_UVSphere(
+            self.radius,
+            self.segments,
+            self.rings
+        )
+
+    else:
+
+        verts, edges, faces = primitive_polySphere(
+            self.base,
+            self.radius,
+            self.divisions,
+            self.tris
+        )
+
+    mesh.clear_geometry()
+    mesh.from_pydata(verts, edges, faces)
+
+    if self.smoothed:
+
+        for poly in mesh.polygons:
+            poly.use_smooth = True
+
+    mesh.update()
+
+
+class WSphereData(bpy.types.PropertyGroup):
 
     radius: FloatProperty(
         name="Radius",
-        description="Radius of the Sphere",
         default=1.0,
         min=0.0,
-        soft_min=0.0001,
-        step=1,
-        unit='LENGTH'
+        update=update_sphere
     )
 
     segments: IntProperty(
         name="Segments",
-        description="Segments on diametr",
         default=24,
         min=3,
-        soft_min=3,
-        step=1,
-        subtype='NONE'
+        update=update_sphere
     )
 
     rings: IntProperty(
         name="Rings",
-        description="Rings",
         default=12,
         min=2,
-        soft_min=2,
-        step=1,
-        subtype='NONE'
+        update=update_sphere
     )
 
     divisions: IntProperty(
-        name="Division",
-        description="Divisions of the base mesh",
+        name="Divisions",
         default=2,
         min=0,
-        soft_min=0,
-        step=1,
-        subtype='NONE'
+        update=update_sphere
     )
 
     Topos = [
-        ('UV', "UV", "", 1),
-        ('TETRA', "Tetrahedron", "", 2),
-        ('CUBE', "Cube", "", 3),
-        ('OCTA', "Octahedron", "", 4),
-        ('ICOSA', "Icosahedron", "", 5)
+        ('UV', "UV", ""),
+        ('TETRA', "Tetrahedron", ""),
+        ('CUBE', "Cube", ""),
+        ('OCTA', "Octahedron", ""),
+        ('ICOSA', "Icosahedron", "")
     ]
 
     base: EnumProperty(
-        items = Topos,
-        name = "Topology",
-        description = "Type of sphere topology",
-        default = 'CUBE'
+        items=Topos,
+        name="Topology",
+        default='CUBE',
+        update=update_sphere
     )
 
     smoothed: BoolProperty(
         name="Smooth",
-        description="Smooth shading",
-        default=True
+        default=True,
+        update=update_sphere
     )
 
     tris: BoolProperty(
         name="Tris",
-        description="Triangulate divisions",
-        default=False
+        default=False,
+        update=update_sphere
     )
+
+
+class Make_WSphere(bpy.types.Operator):
+
+    bl_idname = "mesh.make_wsphere"
+    bl_label = "WSphere"
+    bl_options = {'UNDO', 'REGISTER'}
 
     def execute(self, context):
 
-        mesh = bpy.data.meshes.new("wSphere")
+        verts, edges, faces = primitive_polySphere()
 
-        wD = mesh.wData
-        wD.sBase = self.base
-        wD.rad_1 = self.radius
-        wD.seg_1 = self.segments
-        wD.seg_2 = self.rings
-        wD.seg_3 = self.divisions
-        wD.inn = self.tris
-        wD.smo = self.smoothed
-        wD.wType = 'WSPHERE'
+        obj = create_mesh_object(context, verts, edges, faces, "WSphere")
+        mesh = obj.data
 
+        mesh.WType = 'WSPHERE'
 
-        mesh.from_pydata(*update_WSphere(wD))
-        mesh.update()
-        
-        object_utils.object_data_add(context, mesh, operator=None)
+        mesh.WSphere.radius = WSphere_defaults["radius"]
+        mesh.WSphere.segments = WSphere_defaults["segments"]
+        mesh.WSphere.rings = WSphere_defaults["rings"]
+        mesh.WSphere.base = WSphere_defaults["base"]
+        mesh.WSphere.divisions = WSphere_defaults["divisions"]
+        mesh.WSphere.tris = WSphere_defaults["tris"]
+        mesh.WSphere.smoothed = WSphere_defaults["smoothed"]
 
         bpy.ops.object.shade_smooth()
-        context.object.data.use_auto_smooth = True
-        context.object.data.auto_smooth_angle = 1.0
+
         return {'FINISHED'}
 
-# create UI panel
-def draw_WSphere_panel(self, context):
-    lay_out = self.layout
-    lay_out.use_property_split = True
-    WData = context.object.data.wData
 
-    lay_out.label(text="Type: wSphere", icon='MESH_UVSPHERE')
+def drawWSpherePanel(self, context):
 
-    lay_out.prop(WData, "rad_1", text="Radius")
-    lay_out.prop(WData, "sBase", text="Topology")
+    layout = self.layout
+    WData = context.object.data.WSphere
 
-    if WData.sBase == "UV":
-        col = lay_out.column(align=True)
-        col.prop(WData, "seg_1", text="Segments")
-        col.prop(WData, "seg_2", text="Rings")
-    
+    layout.label(text="Type: WSphere", icon='MESH_UVSPHERE')
+
+    row = layout.row()
+
+    col = row.column()
+    col.prop(WData, "radius")
+    col.prop(WData, "base")
+
+    col = row.column()
+
+    if WData.base == 'UV':
+        col.prop(WData, "segments")
+        col.prop(WData, "rings")
     else:
-        lay_out.prop(WData, "seg_3", text="Divisions")
-        lay_out.prop(WData, "inn", text="Triangulate")
-    
+        col.prop(WData, "divisions")
+        col.prop(WData, "tris")
 
-    lay_out.prop(WData, "smo", text="Smooth Shading")
-    lay_out.prop(WData, "anim", text="Animated")
+    layout.prop(WData, "smoothed")
 
 
-# register
-def reg_wSphere():
+def registerWSphere():
+
     bpy.utils.register_class(Make_WSphere)
-# unregister
-def unreg_wSphere():
+    bpy.utils.register_class(WSphereData)
+
+    bpy.types.Mesh.WSphere = PointerProperty(type=WSphereData)
+
+
+def unregisterWSphere():
+
     bpy.utils.unregister_class(Make_WSphere)
+    bpy.utils.unregister_class(WSphereData)
+
+    del bpy.types.Mesh.WSphere

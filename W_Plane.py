@@ -1,159 +1,169 @@
 # __________________________________/
 # __Author:_________Vit_Prochazka___/
-# __Created:________16.07.2019______/
-# __Version:________1.0_____________/
+# __Change Author:__Skii____________/
+# __Created:________15.12.2015______/
+# __Last_modified:__10.03.2026______/
+# __Version:_0.3_Sub1(Community_Fix)/
 # __________________________________/
 
-# imports
 import bpy
-from bpy.props import (
-    FloatProperty,
-    IntProperty,
-    BoolProperty,
-    PointerProperty
-)
+import bmesh
+from bpy.props import FloatProperty, IntProperty, BoolProperty, PointerProperty
 from mathutils import Vector
-from .genFunctions import bridgeLoops, create_mesh_object
+from .gen_func import bridgeLoops, create_mesh_object
 
-# generate geometry
-def geoGen_WPlane (size_x, size_y, seg_x, seg_y, centered):
-    
-    # set initial values
-    if seg_x < 1: seg_x = 1
-    if seg_y < 1: seg_y = 1
+
+WPlane_Defaults = {
+    "size_x": 2.0,
+    "size_y": 2.0,
+    "seg_x": 1,
+    "seg_y": 1,
+    "centered": True
+}
+
+
+def WPlane_mesh(size_x=2.0, size_y=2.0, seg_x=1, seg_y=1, centered=True):
 
     verts = []
     edges = []
     faces = []
     lines = []
 
-    # precompute 
-    segSize_X = size_x / seg_x
-    segSize_Y = size_y / seg_y
+    dist_x = size_x / seg_x
+    dist_y = size_y / seg_y
 
-    # compute vertices
     for i in range(seg_y + 1):
         line = []
         for j in range(seg_x + 1):
             line.append(len(verts))
-            verts.append(Vector((j * segSize_X, i * segSize_Y, 0.0)))
+            verts.append(Vector((j * dist_x, i * dist_y, 0.0)))
         lines.append(line)
 
-    # fill faces
-    for i in range(len(lines)-1):
+    for i in range(len(lines) - 1):
         faces.extend(bridgeLoops(lines[i], lines[i + 1], False))
 
     if centered:
         half_x = size_x / 2
         half_y = size_y / 2
-        for vertex in verts:
-            vertex[0] -= half_x
-            vertex[1] -= half_y
+        for v in verts:
+            v[0] -= half_x
+            v[1] -= half_y
 
     return verts, edges, faces
 
-def update_wPlane (wData):
-    return geoGen_WPlane (
-        size_x=wData.siz_x,
-        size_y=wData.siz_y,
-        seg_x=wData.seg_1,
-        seg_y=wData.seg_2,
-        centered=wData.cent
+
+def update_plane(self, context):
+
+    if context.object is None:
+        return
+
+    mesh = context.object.data
+
+    verts, edges, faces = WPlane_mesh(
+        self.size_x,
+        self.size_y,
+        self.seg_x,
+        self.seg_y,
+        self.centered
     )
 
-# add object W_Plane
-class Make_WPlane(bpy.types.Operator):
-    """Create primitive wPlane"""
-    bl_idname = "mesh.make_wplane"
-    bl_label = "wPlane"
-    bl_options = {'UNDO', 'REGISTER'}
+    mesh.clear_geometry()
+    mesh.from_pydata(verts, edges, faces)
+    mesh.update()
+
+
+class WPlaneData(bpy.types.PropertyGroup):
 
     size_x: FloatProperty(
-        name = "Width (X)",
-        description = "Size of the wPlane",
-        default = 2.0,
-        min = 0.0,
-        soft_min = 0.0,
-        step = 1,
-        unit='LENGTH'
+        name="X",
+        default=2.0,
+        min=0.0,
+        update=update_plane
     )
 
     size_y: FloatProperty(
-        name = "Length (Y)",
-        description = "Size of the wPlane",
-        default = 2.0,
-        min = 0.0,
-        soft_min = 0.0,
-        step = 1,
-        unit='LENGTH'
+        name="Y",
+        default=2.0,
+        min=0.0,
+        update=update_plane
     )
 
     seg_x: IntProperty(
-        name = "Segments X",
-        description = "Segmentation of the wPlane",
-        default = 1,
-        min = 1,
-        soft_min = 1,
-        step = 1
+        name="X",
+        default=1,
+        min=1,
+        update=update_plane
     )
 
     seg_y: IntProperty(
-        name = "Segments Y",
-        description = "Segmentation of the wPlane",
-        default = 1,
-        min = 1,
-        soft_min = 1,
-        step = 1
+        name="Y",
+        default=1,
+        min=1,
+        update=update_plane
     )
 
     centered: BoolProperty(
-        name = "Centered",
-        description = "Where is origin of the wPlane",
-        default = True
+        name="Centered",
+        default=True,
+        update=update_plane
     )
+
+
+class Make_WPlane(bpy.types.Operator):
+    """Create primitive WPlane"""
+    bl_idname = "mesh.make_wplane"
+    bl_label = "WPlane"
+    bl_options = {'UNDO', 'REGISTER'}
 
     def execute(self, context):
 
-        verts, edges, faces = geoGen_WPlane(
-            size_x=self.size_x,
-            size_y=self.size_y,
-            seg_x=self.seg_x,
-            seg_y=self.seg_y,
-            centered=self.centered
-        )
-        create_mesh_object(context, verts, edges, faces, "wPlane")
+        verts, edges, faces = WPlane_mesh(**WPlane_Defaults)
 
-        wD = context.object.data.wData
-        wD.siz_x = self.size_x
-        wD.siz_y = self.size_y
-        wD.seg_1 = self.seg_x
-        wD.seg_2 = self.seg_y
-        wD.cent = self.centered
-        wD.wType = 'WPLANE'
+        obj = create_mesh_object(context, verts, edges, faces, "WPlane")
+        mesh = obj.data
+
+        mesh.WType = 'WPLANE'
+
+        mesh.WPlane.size_x = WPlane_Defaults["size_x"]
+        mesh.WPlane.size_y = WPlane_Defaults["size_y"]
+        mesh.WPlane.seg_x = WPlane_Defaults["seg_x"]
+        mesh.WPlane.seg_y = WPlane_Defaults["seg_y"]
+        mesh.WPlane.centered = WPlane_Defaults["centered"]
+
+        mesh.WPlane["thisMesh"] = mesh.name
+
         return {'FINISHED'}
-# create UI panel
-def draw_wPlane_panel(self, context):
-    lay_out = self.layout
-    lay_out.use_property_split = True
-    WData = context.object.data.wData
-
-    lay_out.label(text="Type: wPlane", icon='MESH_PLANE')
-
-    col = lay_out.column(align=True)
-    col.prop(WData, "siz_x", text="Size X")
-    col.prop(WData, "siz_y", text="Y")
-    
-    col = lay_out.column(align=True)
-    col.prop(WData, "seg_1", text="Segmentation X")
-    col.prop(WData, "seg_2", text="Y")
-
-    lay_out.prop(WData, "cent", text="Centered")
-    lay_out.prop(WData, "anim", text="Animated")
 
 
-# register
-def reg_wPlane():
+def drawWPlanePanel(self, context):
+
+    layout = self.layout
+    data = context.object.data.WPlane
+
+    layout.label(text="Type: WPlane", icon='MESH_PLANE')
+
+    row = layout.row()
+
+    col = row.column(align=True)
+    col.label(text="Size")
+    col.prop(data, "size_x")
+    col.prop(data, "size_y")
+
+    col = row.column(align=True)
+    col.label(text="Segments")
+    col.prop(data, "seg_x")
+    col.prop(data, "seg_y")
+
+    layout.prop(data, "centered")
+
+
+def registerWPlane():
     bpy.utils.register_class(Make_WPlane)
-# unregister
-def unreg_wPlane():
+    bpy.utils.register_class(WPlaneData)
+    bpy.types.Mesh.WPlane = PointerProperty(type=WPlaneData)
+
+
+def unregisterWPlane():
     bpy.utils.unregister_class(Make_WPlane)
+    bpy.utils.unregister_class(WPlaneData)
+    del bpy.types.Mesh.WPlane

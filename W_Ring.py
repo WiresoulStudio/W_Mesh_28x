@@ -1,46 +1,47 @@
 # __________________________________/
 # __Author:_________Vit_Prochazka___/
-# __Created:________16.07.2019______/
-# __Version:________1.0_____________/
+# __Change Author:__Skii____________/
+# __Created:________16.12.2015______/
+# __Last_modified:__10.03.2026______/
+# __Version:_0.3_Sub1(Community_Fix)/
 # __________________________________/
 
-# imports
-import bpy
-from bpy.props import (
-    FloatProperty,
-    IntProperty,
-    BoolProperty,
-    PointerProperty
-)
-from bpy_extras import object_utils
-from mathutils import Vector, Quaternion
-from math import pi
-from .genFunctions import (
-    circleVerts as circ_V,
-    moveVerts as move_V,
-    fanClose,
-    bridgeLoops,
-    create_mesh_object
-)
+"""
+This file generates and modifies a ring-shaped mesh.
+"""
 
-# generate geometry
-def geoGen_WRing (
-    radius_out,
-    use_inner,
-    radius_in,
-    seg_perimeter,
-    seg_radius,
-    sector_from,
-    sector_to):
-    
-    # Prepare empty lists
+import bpy
+from bpy.props import FloatProperty, IntProperty, BoolProperty, PointerProperty
+from mathutils import Quaternion, Vector
+from .gen_func import bridgeLoops, create_mesh_object
+from math import pi
+
+
+WRing_Defaults = {
+    "radius_out": 1.0,
+    "use_inner": True,
+    "radius_in": 0.0,
+    "seg_perimeter": 24,
+    "seg_radius": 1,
+    "sector_from": 0.0,
+    "sector_to": 2 * pi
+}
+
+
+def primitive_Ring(
+        radius_out=1.0,
+        use_inner=True,
+        radius_in=0.0,
+        seg_perimeter=24,
+        seg_radius=1,
+        sector_from=0.0,
+        sector_to=2 * pi):
+
     verts = []
     edges = []
     faces = []
-
     loops = []
 
-    # make sure of what is bigger
     if radius_out < radius_in:
         radius_in, radius_out = radius_out, radius_in
 
@@ -67,176 +68,177 @@ def geoGen_WRing (
         closed = False
 
     if use_inner:
+
         for r in range(loop_number):
             loop = []
             for s in range(seg_number):
                 loop.append(len(verts))
                 quat = Quaternion((0, 0, 1), (s * stepAngle) + sector_from)
-                verts.append(quat @ Vector((
-                    radius_out - (r * stepRadius), 0.0, 0.0)))
+                verts.append(quat @ Vector((radius_out - (r * stepRadius), 0.0, 0.0)))
             loops.append(loop)
 
-        # fill the loops
         for i in range(len(loops) - 1):
             faces.extend(bridgeLoops(loops[i], loops[i + 1], closed))
 
-        # one point in the middle
         if loop_number == seg_radius:
             verts.append(Vector((0.0, 0.0, 0.0)))
             for s in range(seg_number - 1):
-                faces.append((loops[-1][s], loops[-1][s+1], len(verts) - 1))
+                faces.append((loops[-1][s], loops[-1][s + 1], len(verts) - 1))
             if seg_number == seg_perimeter:
                 faces.append((loops[-1][-1], loops[-1][0], len(verts) - 1))
 
     else:
+
         for s in range(seg_number):
             quat = Quaternion((0, 0, 1), (s * stepAngle) + sector_from)
             verts.append(quat @ Vector((radius_out, 0.0, 0.0)))
 
         for v in range(len(verts) - 1):
             edges.append((v, v + 1))
+
         if closed:
             edges.append((len(verts) - 1, 0))
 
     return verts, edges, faces
 
-def update_WRing (wData):
-    return geoGen_WRing (
-        radius_out = wData.rad_1,
-        use_inner = wData.inn,
-        radius_in = wData.rad_2,
-        seg_perimeter = wData.seg_1,
-        seg_radius = wData.seg_2,
-        sector_from = wData.sec_f,
-        sector_to = wData.sec_t
+
+def update_ring(self, context):
+
+    if context.object is None:
+        return
+
+    mesh = context.object.data
+
+    verts, edges, faces = primitive_Ring(
+        self.radius_out,
+        self.use_inner,
+        self.radius_in,
+        self.seg_perimeter,
+        self.seg_radius,
+        self.sector_from,
+        self.sector_to
     )
 
-# add object W_Plane
-class Make_WRing(bpy.types.Operator):
-    """Create primitive wRing"""
-    bl_idname = "mesh.make_wring"
-    bl_label = "wRing"
-    bl_options = {'UNDO', 'REGISTER'}
+    mesh.clear_geometry()
+    mesh.from_pydata(verts, edges, faces)
+    mesh.update()
+
+
+class WRingData(bpy.types.PropertyGroup):
 
     radius_out: FloatProperty(
         name="Outer",
-        description="Outer radius",
         default=1.0,
         min=0.0,
-        soft_min=0.0,
-        step=1,
-        unit='LENGTH'
+        update=update_ring
     )
 
     use_inner: BoolProperty(
-        name="Use inner",
-        description="use inner radius",
-        default=True
+        name="Use Inner",
+        default=True,
+        update=update_ring
     )
 
     radius_in: FloatProperty(
         name="Inner",
-        description="Inner radius",
         default=0.0,
         min=0.0,
-        soft_min=0.0,
-        step=1,
-        unit='LENGTH'
+        update=update_ring
     )
 
     seg_perimeter: IntProperty(
         name="Perimeter",
-        description="Subdivision of the perimeter",
         default=24,
         min=3,
-        soft_min=3,
-        step=1
-        )
+        update=update_ring
+    )
 
     seg_radius: IntProperty(
         name="Radius",
-        description="Subdivision of the radius",
         default=1,
         min=1,
-        soft_min=1,
-        step=1
-        )
+        update=update_ring
+    )
 
     sector_from: FloatProperty(
         name="From",
-        description="Setor from",
         default=0.0,
         min=0.0,
-        soft_min=0.0,
-        max = 2 * pi,
-        soft_max = 2 * pi,
-        step=10,
-        unit='ROTATION'
+        max=2 * pi,
+        unit='ROTATION',
+        update=update_ring
     )
 
     sector_to: FloatProperty(
-        name="From",
-        description="Setor from",
+        name="To",
         default=2 * pi,
         min=0.0,
-        soft_min=0.0,
-        max = 2 * pi,
-        soft_max = 2 * pi,
-        step=10,
-        unit='ROTATION'
+        max=2 * pi,
+        unit='ROTATION',
+        update=update_ring
     )
+
+
+class Make_WRing(bpy.types.Operator):
+    """Create primitive WRing"""
+    bl_idname = "mesh.make_wring"
+    bl_label = "WRing"
+    bl_options = {'UNDO', 'REGISTER'}
 
     def execute(self, context):
 
-        mesh = bpy.data.meshes.new("wRing")
+        verts, edges, faces = primitive_Ring(**WRing_Defaults)
 
-        wD = mesh.wData
-        wD.rad_1 = self.radius_out
-        wD.inn = self.use_inner
-        wD.rad_2 = self.radius_in
-        wD.seg_1 = self.seg_perimeter
-        wD.seg_2 = self.seg_radius
-        wD.sec_f = self.sector_from
-        wD.sec_t = self.sector_to
-        wD.wType = 'WRING'
+        obj = create_mesh_object(context, verts, edges, faces, "WRing")
+        mesh = obj.data
 
+        mesh.WType = 'WRING'
 
-        mesh.from_pydata(*update_WRing(wD))
-        mesh.update()
-        
-        object_utils.object_data_add(context, mesh, operator=None)
+        mesh.WRing.radius_out = WRing_Defaults["radius_out"]
+        mesh.WRing.radius_in = WRing_Defaults["radius_in"]
+        mesh.WRing.use_inner = WRing_Defaults["use_inner"]
+        mesh.WRing.seg_perimeter = WRing_Defaults["seg_perimeter"]
+        mesh.WRing.seg_radius = WRing_Defaults["seg_radius"]
+        mesh.WRing.sector_from = WRing_Defaults["sector_from"]
+        mesh.WRing.sector_to = WRing_Defaults["sector_to"]
 
-        bpy.ops.object.shade_smooth()
-        context.object.data.use_auto_smooth = True
         return {'FINISHED'}
 
-# create UI panel
-def draw_WRing_panel(self, context):
-    lay_out = self.layout
-    lay_out.use_property_split = True
-    WData = context.object.data.wData
 
-    lay_out.label(text="Type: wRing", icon='MESH_CIRCLE')
+def drawWRingPanel(self, context):
 
-    col = lay_out.column(align=True)
-    col.prop(WData, "rad_1", text="Radius Main")
-    col.prop(WData, "rad_2", text="Inner")
+    layout = self.layout
+    data = context.object.data.WRing
 
-    col = lay_out.column(align=True)
-    col.prop(WData, "sec_f", text="Section From")
-    col.prop(WData, "sec_t", text="To")
-    
-    col = lay_out.column(align=True)
-    col.prop(WData, "seg_1", text="Segmentation Main")
-    col.prop(WData, "seg_2", text="Cap")
+    layout.label(text="Type: WRing", icon='MESH_CIRCLE')
 
-    lay_out.prop(WData, "inn", text="Use inner radius")
-    lay_out.prop(WData, "anim", text="Animated")
+    row = layout.row()
+
+    col = row.column(align=True)
+    col.label(text="Radiuses")
+    col.prop(data, "radius_out")
+    col.prop(data, "radius_in")
+
+    col = row.column(align=True)
+    col.label(text="Segmentation")
+    col.prop(data, "seg_perimeter")
+    col.prop(data, "seg_radius")
+
+    col = row.column(align=True)
+    col.label(text="Section")
+    col.prop(data, "sector_from")
+    col.prop(data, "sector_to")
+
+    layout.prop(data, "use_inner")
 
 
-# register
-def reg_wRing():
+def registerWRing():
     bpy.utils.register_class(Make_WRing)
-# unregister
-def unreg_wRing():
+    bpy.utils.register_class(WRingData)
+    bpy.types.Mesh.WRing = PointerProperty(type=WRingData)
+
+
+def unregisterWRing():
     bpy.utils.unregister_class(Make_WRing)
+    bpy.utils.unregister_class(WRingData)
+    del bpy.types.Mesh.WRing
